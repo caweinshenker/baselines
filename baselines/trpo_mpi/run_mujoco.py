@@ -12,10 +12,13 @@ from baselines.common.mpi_fork import mpi_fork
 from baselines import bench
 from baselines.trpo_mpi import trpo_mpi
 from baselines.trpo_mpi.trpo_args import base_args, trpo_args, ex
+from sacred.stflow import LogFileWriter
 import sys
+import tensorflow as tf
 num_cpu=1
 
 @ex.automain
+@LogFileWriter(ex)
 def train(env_id, num_timesteps, seed, render, timesteps_per_batch, max_kl, \
           cg_iters, cg_damping, gamma, lam, vf_iters, vf_stepsize):
     whoami  = mpi_fork(num_cpu)
@@ -25,7 +28,7 @@ def train(env_id, num_timesteps, seed, render, timesteps_per_batch, max_kl, \
     logger.session().__enter__()
     sess = U.single_threaded_session()
     sess.__enter__()
-
+    swr = tf.summary.FileWriter("/tmp/1", sess.graph)
     rank = MPI.COMM_WORLD.Get_rank()
     if rank != 0:
         logger.set_level(logger.DISABLED)

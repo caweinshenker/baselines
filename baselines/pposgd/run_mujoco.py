@@ -4,15 +4,21 @@ from baselines import bench
 from baselines.pposgd.pposgd_args import base_args, pposgd_args, ex
 import os.path as osp
 import gym, logging
+import sacred
+from sacred.stflow import LogFileWriter
 from baselines import logger
 import sys
+import tensorflow as tf
 
 @ex.automain
+@LogFileWriter(ex)
 def train(env_id, num_timesteps, seed, render, timesteps_per_batch, \
           clip_param, entcoeff, optim_epochs, optim_stepsize, optim_batchsize, \
           gamma, lam):
     from baselines.pposgd import mlp_policy, pposgd_simple
-    U.make_session(num_cpu=1).__enter__()
+    session = U.make_session(num_cpu=1)
+    session.__enter__()
+    swr = tf.summary.FileWriter("/tmp/1", session.graph)
     logger.session().__enter__()
     set_global_seeds(seed)
     env = gym.make(env_id)
