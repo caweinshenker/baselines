@@ -10,7 +10,7 @@ from baselines.common.mpi_adam import MpiAdam
 from baselines.common.cg import cg
 from contextlib import contextmanager
 
-def traj_segment_generator(pi, env, horizon, stochastic):
+def traj_segment_generator(pi, env, horizon, stochastic, render):
     # Initialize state variables
     t = 0
     ac = env.action_space.sample()
@@ -41,7 +41,7 @@ def traj_segment_generator(pi, env, horizon, stochastic):
             yield {"ob" : obs, "rew" : rews, "vpred" : vpreds, "new" : news,
                     "ac" : acs, "prevac" : prevacs, "nextvpred": vpred * (1 - new),
                     "ep_rets" : ep_rets, "ep_lens" : ep_lens}
-            _, vpred = pi.act(stochastic, ob)            
+            _, vpred = pi.act(stochastic, ob)
             # Be careful!!! if you change the downstream algorithm to aggregate
             # several of these batches, then be sure to do a deepcopy
             ep_rets = []
@@ -55,6 +55,9 @@ def traj_segment_generator(pi, env, horizon, stochastic):
 
         ob, rew, new, _ = env.step(ac)
         rews[i] = rew
+
+        if render:
+            env.render()
 
         cur_ep_ret += rew
         cur_ep_len += 1
@@ -87,12 +90,13 @@ def learn(env, policy_func, *,
         cg_damping=1e-2,
         vf_stepsize=3e-4,
         vf_iters =3,
+        render = False,
         max_timesteps=0, max_episodes=0, max_iters=0,  # time constraint
         callback=None
         ):
     nworkers = MPI.COMM_WORLD.Get_size()
     rank = MPI.COMM_WORLD.Get_rank()
-    np.set_printoptions(precision=3)    
+    np.set_printoptions(precision=3)
     # Setup losses and stuff
     # ----------------------------------------
     ob_space = env.observation_space
@@ -157,7 +161,7 @@ def learn(env, policy_func, *,
             print(colorize("done in %.3f seconds"%(time.time() - tstart), color='magenta'))
         else:
             yield
-    
+
     def allmean(x):
         assert isinstance(x, np.ndarray)
         out = np.empty_like(x)
@@ -174,7 +178,7 @@ def learn(env, policy_func, *,
 
     # Prepare for rollouts
     # ----------------------------------------
-    seg_gen = traj_segment_generator(pi, env, timesteps_per_batch, stochastic=True)
+    seg_gen = traj_segment_generator(pi, env, timesteps_per_batch, stochastic=True, render=render)
 
     episodes_so_far = 0
     timesteps_so_far = 0
@@ -185,7 +189,7 @@ def learn(env, policy_func, *,
 
     assert sum([max_iters>0, max_timesteps>0, max_episodes>0])==1
 
-    while True:        
+    while True:
         if callback: callback(locals(), globals())
         if max_timesteps and timesteps_so_far >= max_timesteps:
             break
@@ -260,7 +264,7 @@ def learn(env, policy_func, *,
         with timed("vf"):
 
             for _ in range(vf_iters):
-                for (mbob, mbret) in dataset.iterbatches((seg["ob"], seg["tdlamret"]), 
+                for (mbob, mbret) in dataset.iterbatches((seg["ob"], seg["tdlamret"]),
                 include_final_partial_batch=False, batch_size=64):
                     g = allmean(compute_vflossandgrad(mbob, mbret))
                     vfadam.update(g, vf_stepsize)

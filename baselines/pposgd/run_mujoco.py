@@ -1,12 +1,16 @@
 #!/usr/bin/env python
 from baselines.common import set_global_seeds, tf_util as U
 from baselines import bench
+from baselines.pposgd.pposgd_args import base_args, pposgd_args, ex
 import os.path as osp
 import gym, logging
 from baselines import logger
 import sys
 
-def train(env_id, num_timesteps, seed):
+@ex.automain
+def train(env_id, num_timesteps, seed, render, timesteps_per_batch, \
+          clip_param, entcoeff, optim_epochs, optim_stepsize, optim_batchsize, \
+          gamma, lam):
     from baselines.pposgd import mlp_policy, pposgd_simple
     U.make_session(num_cpu=1).__enter__()
     logger.session().__enter__()
@@ -18,18 +22,25 @@ def train(env_id, num_timesteps, seed):
     env = bench.Monitor(env, osp.join(logger.get_dir(), "monitor.json"))
     env.seed(seed)
     gym.logger.setLevel(logging.WARN)
-    pposgd_simple.learn(env, policy_fn, 
-            max_timesteps=num_timesteps,
-            timesteps_per_batch=2048,
-            clip_param=0.2, entcoeff=0.0,
-            optim_epochs=10, optim_stepsize=3e-4, optim_batchsize=64,
-            gamma=0.99, lam=0.95,
+    pposgd_simple.learn(env, policy_fn, \
+            max_timesteps=num_timesteps, \
+            timesteps_per_batch=timesteps_per_batch, \
+            clip_param=clip_param,\
+            entcoeff=entcoeff, \
+            optim_epochs=optim_epochs,\
+            optim_stepsize=optim_stepsize, \
+            optim_batchsize=optim_batchsize, \
+            gamma=gamma,\
+            lam=lam, \
+            render=render
         )
     env.close()
 
 def main():
-    train('Hopper-v1', num_timesteps=1e6, seed=0)
+    train()
 
 
 if __name__ == '__main__':
+    base_args()
+    pposgd_args()
     main()

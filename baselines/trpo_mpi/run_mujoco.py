@@ -11,10 +11,13 @@ from baselines.pposgd.mlp_policy import MlpPolicy
 from baselines.common.mpi_fork import mpi_fork
 from baselines import bench
 from baselines.trpo_mpi import trpo_mpi
+from baselines.trpo_mpi.trpo_args import base_args, trpo_args, ex
 import sys
 num_cpu=1
 
-def train(env_id, num_timesteps, seed):
+@ex.automain
+def train(env_id, num_timesteps, seed, render, timesteps_per_batch, max_kl, \
+          cg_iters, cg_damping, gamma, lam, vf_iters, vf_stepsize):
     whoami  = mpi_fork(num_cpu)
     if whoami == "parent":
         return
@@ -36,12 +39,18 @@ def train(env_id, num_timesteps, seed):
     env.seed(workerseed)
     gym.logger.setLevel(logging.WARN)
 
-    trpo_mpi.learn(env, policy_fn, timesteps_per_batch=1024, max_kl=0.01, cg_iters=10, cg_damping=0.1,
-        max_timesteps=num_timesteps, gamma=0.99, lam=0.98, vf_iters=5, vf_stepsize=1e-3)
+    trpo_mpi.learn(env, policy_fn, timesteps_per_batch=timesteps_per_batch, \
+                    max_kl=max_kl, cg_iters=cg_iters, cg_damping=cg_damping, \
+                    max_timesteps=num_timesteps, gamma=gamma, lam=lam, \
+                    vf_iters=vf_iters, vf_stepsize=vf_stepsize, render=render)
     env.close()
 
+@ex.capture
 def main():
-    train('Hopper-v1', num_timesteps=1e6, seed=0)
+    #train(env_id, num_timesteps, seed)
+    train()
 
 if __name__ == '__main__':
+    base_args()
+    trpo_args()
     main()
